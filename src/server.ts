@@ -1,10 +1,9 @@
 import "dotenv/config";
 import path from "node:path";
-import Anthropic from "@anthropic-ai/sdk";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
-import { runAgent, type AgentMessage } from "./agent.js";
+import { PROVIDER, describeModelError, runAgent, type AgentMessage } from "./agent.js";
 import { tokenMatches } from "./auth.js";
 import { createPool } from "./db.js";
 
@@ -76,14 +75,9 @@ app.post("/api/chat", chatLimiter, async (req, res) => {
 
     res.json({ conversationId: id, reply: result.reply });
   } catch (err) {
-    if (err instanceof Anthropic.RateLimitError) {
-      res.status(503).json({ error: "The assistant is busy. Try again in a minute." });
-    } else if (err instanceof Anthropic.AuthenticationError) {
-      console.error("Anthropic API key is missing or invalid");
-      res.status(500).json({ error: "The assistant isn't configured yet." });
-    } else if (err instanceof Anthropic.APIError) {
-      console.error(`Anthropic API error ${err.status}`, err.message);
-      res.status(502).json({ error: "The assistant had a problem. Try again." });
+    const modelError = describeModelError(err);
+    if (modelError) {
+      res.status(modelError.status).json({ error: modelError.message });
     } else {
       console.error(err);
       res.status(500).json({ error: "Something went wrong." });
@@ -116,5 +110,5 @@ app.get("/api/admin/tickets", adminLimiter, async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Helpdesk agent running on http://localhost:${PORT}`);
+  console.log(`Helpdesk agent running on http://localhost:${PORT} (model provider: ${PROVIDER})`);
 });

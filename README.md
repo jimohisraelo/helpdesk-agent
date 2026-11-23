@@ -2,7 +2,7 @@
 
 An AI customer-support agent for a demo online store ("Kora Market"). It answers policy questions from a help centre, looks up orders, and hands hard cases to a human by opening a ticket.
 
-Built with **TypeScript, Express, PostgreSQL, Docker** and **Claude** (Anthropic API, tool calling).
+Built with **TypeScript, Express, PostgreSQL and Docker**. It runs on **OpenAI** or **Claude** (tool calling in both), picked with one environment variable.
 
 ## What it does
 
@@ -16,7 +16,7 @@ Built with **TypeScript, Express, PostgreSQL, Docker** and **Claude** (Anthropic
 ## How it works
 
 ```
-Browser ──POST /api/chat──▶ Express ──▶ agent loop ──▶ Claude API
+Browser ──POST /api/chat──▶ Express ──▶ agent loop ──▶ OpenAI or Claude API
                                │            │  ▲
                                │            ▼  │ tool results
                                │        tools.ts (search / lookup / ticket)
@@ -25,8 +25,9 @@ Browser ──POST /api/chat──▶ Express ──▶ agent loop ──▶ Cla
                  (orders, help_articles, tickets, conversations)
 ```
 
-- **Agent loop** (`src/agent.ts`): sends the conversation and tool list to Claude, runs the tools it asks for, sends the results back, repeats until it has an answer (capped at 8 steps per message).
-- **Tools** (`src/tools.ts`): `search_help_center`, `lookup_order`, `create_ticket`.
+- **Agent loop** (`src/providers/openai.ts`, `src/providers/claude.ts`): sends the conversation and tool list to the model, runs the tools it asks for, sends the results back, and repeats until it has an answer (capped at 8 steps per message).
+- **One prompt, one set of tools, two providers.** The system prompt (`src/prompt.ts`) and tools (`src/tools.ts`) are shared; each provider file only translates to its API's message format. `src/agent.ts` picks the provider: `LLM_PROVIDER` if set, otherwise whichever API key is present.
+- **Tools** (`src/tools.ts`): `search_help_center`, `lookup_order`, `create_ticket`. They are strict JSON-schema tools, so the same definitions work on both APIs.
 - **Conversations** are stored in Postgres as JSONB, so a chat continues across requests and the transcript is only ever appended to.
 
 ## Security decisions
@@ -40,10 +41,10 @@ Browser ──POST /api/chat──▶ Express ──▶ agent loop ──▶ Cla
 
 ## Run it
 
-You need Docker and an [Anthropic API key](https://console.anthropic.com/).
+You need Docker and an API key from [OpenAI](https://platform.openai.com/api-keys) or [Anthropic](https://console.anthropic.com/).
 
 ```bash
-cp .env.example .env          # then put your key in ANTHROPIC_API_KEY
+cp .env.example .env          # then fill in OPENAI_API_KEY or ANTHROPIC_API_KEY
 docker compose up --build
 ```
 
@@ -58,9 +59,10 @@ npm run dev
 ```
 
 ```bash
-npm test          # unit tests (tool validation and authorization)
+npm test          # unit tests: tool validation, authorization, provider selection, OpenAI tool loop (mocked)
 npm run typecheck
 npm run evals     # behaviour evals against the real model + database (uses API credit)
+LLM_PROVIDER=anthropic npm run evals   # same evals on the other provider, to compare
 ```
 
 ## Evals

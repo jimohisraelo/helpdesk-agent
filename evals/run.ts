@@ -1,14 +1,13 @@
 /**
  * Evals: run fixed customer messages through the real agent (Claude + Postgres)
- * and check its behaviour: which tools it called, and what the reply must or
- * must not contain. Run with `npm run evals` (needs ANTHROPIC_API_KEY and the
+ * (OpenAI or Claude, see LLM_PROVIDER) and check its behaviour: which tools it called, and what the reply must or
+ * must not contain. Run with `npm run evals` (needs OPENAI_API_KEY or ANTHROPIC_API_KEY, and the
  * database from `docker compose up -d db`). Exits 1 if any case fails.
  *
  * Note: the ticket case really creates a ticket in the database.
  */
 import "dotenv/config";
-import type Anthropic from "@anthropic-ai/sdk";
-import { runAgent, type AgentMessage } from "../src/agent.js";
+import { PROVIDER, runAgent, type AgentMessage } from "../src/agent.js";
 import { createPool } from "../src/db.js";
 
 interface EvalCase {
@@ -66,31 +65,22 @@ const CASES: EvalCase[] = [
   },
 ];
 
-function toolsCalled(messages: AgentMessage[]): string[] {
-  const names: string[] = [];
-  for (const m of messages) {
-    if (m.role !== "assistant" || typeof m.content === "string") continue;
-    for (const block of m.content as Anthropic.Beta.BetaContentBlockParam[]) {
-      if (block.type === "tool_use") names.push(block.name);
-    }
-  }
-  return names;
-}
-
 async function main() {
   const db = createPool();
   let failed = 0;
+  console.log(`Running ${CASES.length} evals with provider: ${PROVIDER}\n`);
 
   for (const c of CASES) {
     let history: AgentMessage[] = [];
     let reply = "";
+    const called: string[] = [];
     for (const turn of c.turns) {
       const result = await runAgent(history, turn, db);
       history = result.messages;
       reply = result.reply;
+      called.push(...result.toolsCalled);
     }
 
-    const called = toolsCalled(history);
     const lower = reply.toLowerCase();
     const problems: string[] = [];
 
