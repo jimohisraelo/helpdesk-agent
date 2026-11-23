@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Kora Market Tickets</title>
+  <style>
+    :root { --bg: #f6f5f2; --panel: #fff; --text: #1c1b19; --muted: #6b6860; --accent: #0f6b4f; --line: #e4e2dc; --high: #b3261e; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #151514; --panel: #1f1f1d; --text: #ecebe7; --muted: #a09d94; --accent: #4cc39a; --line: #33332f; --high: #f2b8b5; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    main { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+    h1 { font-size: 1.25rem; margin: 0 0 16px; }
+    form { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    input { flex: 1; min-width: 200px; padding: 10px; border-radius: 8px; border: 1px solid var(--muted); background: var(--panel); color: var(--text); font: inherit; }
+    button { padding: 10px 16px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
+    #status { color: var(--muted); margin: 0 0 12px; }
+    .wrap { overflow-x: auto; background: var(--panel); border-radius: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    td.prio-high { color: var(--high); font-weight: 600; }
+    td.when { white-space: nowrap; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Support tickets</h1>
+    <form id="auth">
+      <input id="token" type="password" placeholder="Admin token" autocomplete="current-password" required />
+      <button type="submit">Load tickets</button>
+    </form>
+    <p id="status">Enter the admin token to see tickets the assistant has opened.</p>
+    <div class="wrap">
+      <table>
+        <thead><tr><th>#</th><th>Priority</th><th>Customer</th><th>Subject</th><th>Summary</th><th>Opened</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </main>
+  <script>
+    const form = document.getElementById("auth");
+    const tokenInput = document.getElementById("token");
+    const statusEl = document.getElementById("status");
+    const rows = document.getElementById("rows");
+
+    function cell(text, className) {
+      const td = document.createElement("td");
+      td.textContent = text; // never innerHTML: summaries are model-written
+      if (className) td.className = className;
+      return td;
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      statusEl.textContent = "Loading…";
+      rows.replaceChildren();
+      try {
+        const res = await fetch("/api/admin/tickets", { headers: { Authorization: "Bearer " + tokenInput.value } });
+        const data = await res.json();
+        if (!res.ok) { statusEl.textContent = data.error || "Could not load tickets."; return; }
+        statusEl.textContent = data.tickets.length + " ticket(s), newest first.";
+        for (const t of data.tickets) {
+          const tr = document.createElement("tr");
+          tr.append(
+            cell("T-" + t.id),
+            cell(t.priority, "prio-" + t.priority),
+            cell(t.email),
+            cell(t.subject),
+            cell(t.summary),
+            cell(new Date(t.created_at).toLocaleString(), "when"),
+          );
+          rows.append(tr);
+        }
+      } catch {
+        statusEl.textContent = "Network error. Is the server running?";
+      }
+    });
+  </script>
+</body>
+</html>
