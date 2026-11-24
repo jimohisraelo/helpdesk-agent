@@ -6,6 +6,7 @@ import { z } from "zod";
 import { PROVIDER, describeModelError, runAgent, type AgentMessage } from "./agent.js";
 import { tokenMatches } from "./auth.js";
 import { createPool } from "./db.js";
+import { ensureSchema } from "./migrate.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const MAX_STORED_MESSAGES = 80; // keeps each conversation (and its cost) bounded
@@ -114,6 +115,13 @@ app.get("/api/admin/tickets", adminLimiter, async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Helpdesk agent running on http://localhost:${PORT} (model provider: ${PROVIDER})`);
-});
+ensureSchema(db)
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Helpdesk agent running on http://localhost:${PORT} (model provider: ${PROVIDER})`);
+    });
+  })
+  .catch((err) => {
+    console.error("Could not prepare the database", err);
+    process.exit(1);
+  });
