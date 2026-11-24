@@ -53,6 +53,16 @@
 
     add("Hi! I can help with orders, delivery, returns and payments. What do you need?", "bot");
 
+    fetch("/api/config")
+      .then((r) => r.json())
+      .then((cfg) => {
+        if (cfg.provider === "mock") {
+          document.querySelector("p.hint").textContent +=
+            " (Demo mode: replies come from a scripted test model, not a real AI. Orders, tickets and the database are real.)";
+        }
+      })
+      .catch(() => {});
+
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const message = input.value.trim();

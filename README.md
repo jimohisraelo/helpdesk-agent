@@ -2,7 +2,7 @@
 
 An AI customer-support agent for a demo online store ("Kora Market"). It answers policy questions from a help centre, looks up orders, and hands hard cases to a human by opening a ticket.
 
-Built with **TypeScript, Express, PostgreSQL and Docker**. It runs on **OpenAI** or **Claude** (tool calling in both), picked with one environment variable.
+Built with **TypeScript, Express, PostgreSQL and Docker**. It runs on **OpenAI** or **Claude** (tool calling in both), or on a free scripted test model, picked with one environment variable.
 
 ## What it does
 
@@ -26,7 +26,7 @@ Browser ──POST /api/chat──▶ Express ──▶ agent loop ──▶ Ope
 ```
 
 - **Agent loop** (`src/providers/openai.ts`, `src/providers/claude.ts`): sends the conversation and tool list to the model, runs the tools it asks for, sends the results back, and repeats until it has an answer (capped at 8 steps per message).
-- **One prompt, one set of tools, two providers.** The system prompt (`src/prompt.ts`) and tools (`src/tools.ts`) are shared; each provider file only translates to its API's message format. `src/agent.ts` picks the provider: `LLM_PROVIDER` if set, otherwise whichever API key is present.
+- **One prompt, one set of tools, two providers.** The system prompt (`src/prompt.ts`) and tools (`src/tools.ts`) are shared; each provider file only translates to its API's message format. `src/agent.ts` picks the provider: `LLM_PROVIDER` if set, otherwise whichever API key is present, otherwise the free test model.
 - **Tools** (`src/tools.ts`): `search_help_center`, `lookup_order`, `create_ticket`. They are strict JSON-schema tools, so the same definitions work on both APIs.
 - **Conversations** are stored in Postgres as JSONB, so a chat continues across requests and the transcript is only ever appended to.
 
@@ -41,14 +41,18 @@ Browser ──POST /api/chat──▶ Express ──▶ agent loop ──▶ Ope
 
 ## Run it
 
-You need Docker and an API key from [OpenAI](https://platform.openai.com/api-keys) or [Anthropic](https://console.anthropic.com/).
+You need Docker. An API key from [OpenAI](https://platform.openai.com/api-keys) or [Anthropic](https://console.anthropic.com/) is optional.
 
 ```bash
-cp .env.example .env          # then fill in OPENAI_API_KEY or ANTHROPIC_API_KEY
+cp .env.example .env          # optionally fill in OPENAI_API_KEY or ANTHROPIC_API_KEY
 docker compose up --build
 ```
 
 Open http://localhost:3000.
+
+### Free test mode (no API key, no cost)
+
+With no API key, or with `LLM_PROVIDER=mock`, the app uses a **scripted test model** (`src/providers/mock.ts`) instead of a real LLM. It picks tools with simple pattern matching, but the tools, database, ownership checks and tickets are all real. Use it to demo the app, develop the UI, or run the evals without spending credit. The chat page shows a "Demo mode" note while it's on.
 
 ### Local development (hot reload)
 
@@ -59,10 +63,10 @@ npm run dev
 ```
 
 ```bash
-npm test          # unit tests: tool validation, authorization, provider selection, OpenAI tool loop (mocked)
+npm test          # unit tests: tool validation, authorization, provider selection, OpenAI tool loop, test model
 npm run typecheck
-npm run evals     # behaviour evals against the real model + database (uses API credit)
-LLM_PROVIDER=anthropic npm run evals   # same evals on the other provider, to compare
+LLM_PROVIDER=mock npm run evals        # evals against the real database with the free test model
+LLM_PROVIDER=openai npm run evals      # same evals on a real model (uses API credit)
 ```
 
 ## Evals
@@ -98,5 +102,6 @@ To reset the database: `docker compose down -v` (deletes the data volume), then 
 - [ ] Stream replies token by token
 - [x] Evals: a fixed set of customer questions with expected behaviour
 - [x] Admin page listing tickets
-- [x] GitHub Actions: typecheck, test, build the Docker image
+- [x] GitHub Actions: typecheck, test, evals on a real Postgres (test model), build the Docker image
+- [x] Free test mode: scripted model, no API key needed
 - [ ] Semantic search with pgvector alongside full-text search

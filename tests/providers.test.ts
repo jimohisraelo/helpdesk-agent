@@ -24,9 +24,11 @@ describe("pickProvider", () => {
     expect(pickProvider({ LLM_PROVIDER: "OpenAI" })).toBe("openai");
   });
 
-  it("falls back to whichever key is present", () => {
+  it("falls back to whichever key is present, then to the free mock model", () => {
     expect(pickProvider({ OPENAI_API_KEY: "x" })).toBe("openai");
-    expect(pickProvider({})).toBe("anthropic");
+    expect(pickProvider({ ANTHROPIC_API_KEY: "x" })).toBe("anthropic");
+    expect(pickProvider({})).toBe("mock");
+    expect(pickProvider({ LLM_PROVIDER: "mock", OPENAI_API_KEY: "x" })).toBe("mock");
   });
 
   it("rejects an unknown provider", () => {

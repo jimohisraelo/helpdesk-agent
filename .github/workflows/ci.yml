@@ -22,6 +22,38 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  # Behaviour evals against a real Postgres, using the free scripted test model (no API key needed).
+  evals:
+    runs-on: ubuntu-latest
+    needs: check
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: helpdesk
+          POSTGRES_PASSWORD: helpdesk
+          POSTGRES_DB: helpdesk
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U helpdesk -d helpdesk"
+          --health-interval 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://helpdesk:helpdesk@localhost:5432/helpdesk
+      PGPASSWORD: helpdesk
+      LLM_PROVIDER: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Load schema and seed data
+        run: for f in db/*.sql; do psql -h localhost -U helpdesk -d helpdesk -v ON_ERROR_STOP=1 -f "$f"; done
+      - run: npm run evals
+
   docker:
     runs-on: ubuntu-latest
     needs: check

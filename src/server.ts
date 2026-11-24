@@ -26,6 +26,11 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
+// Lets the UI show a "demo mode" note when the scripted model is in use.
+app.get("/api/config", (_req, res) => {
+  res.json({ provider: PROVIDER });
+});
+
 const ChatBody = z.object({
   conversationId: z.string().uuid().optional(),
   message: z.string().trim().min(1).max(2000),

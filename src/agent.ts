@@ -3,24 +3,39 @@ import OpenAI from "openai";
 import type { Db } from "./db.js";
 import type { AgentMessage, AgentResult } from "./prompt.js";
 import { runClaudeAgent } from "./providers/claude.js";
+import { runMockAgent } from "./providers/mock.js";
 import { runOpenAIAgent } from "./providers/openai.js";
 
 export type { AgentMessage, AgentResult } from "./prompt.js";
 
-export type Provider = "openai" | "anthropic";
+export const PROVIDERS = ["openai", "anthropic", "mock"] as const;
+export type Provider = (typeof PROVIDERS)[number];
 
-/** LLM_PROVIDER wins; otherwise use whichever API key is set (OpenAI first). */
+/**
+ * LLM_PROVIDER wins. Otherwise use whichever API key is set (OpenAI first),
+ * and with no key at all fall back to the free scripted "mock" model.
+ */
 export function pickProvider(env: NodeJS.ProcessEnv = process.env): Provider {
   const chosen = env.LLM_PROVIDER?.trim().toLowerCase();
-  if (chosen === "openai" || chosen === "anthropic") return chosen;
-  if (chosen) throw new Error(`LLM_PROVIDER must be "openai" or "anthropic", got "${chosen}"`);
-  return env.OPENAI_API_KEY ? "openai" : "anthropic";
+  if (chosen) {
+    if ((PROVIDERS as readonly string[]).includes(chosen)) return chosen as Provider;
+    throw new Error(`LLM_PROVIDER must be one of ${PROVIDERS.join(", ")}; got "${chosen}"`);
+  }
+  if (env.OPENAI_API_KEY) return "openai";
+  if (env.ANTHROPIC_API_KEY) return "anthropic";
+  return "mock";
 }
 
 export const PROVIDER: Provider = pickProvider();
 
+const RUNNERS: Record<Provider, typeof runMockAgent> = {
+  openai: runOpenAIAgent,
+  anthropic: runClaudeAgent,
+  mock: runMockAgent,
+};
+
 export function runAgent(history: AgentMessage[], userText: string, db: Db): Promise<AgentResult> {
-  return PROVIDER === "openai" ? runOpenAIAgent(history, userText, db) : runClaudeAgent(history, userText, db);
+  return RUNNERS[PROVIDER](history, userText, db);
 }
 
 /** Maps either SDK's errors to an HTTP status and a customer-safe message. */
